@@ -6,9 +6,12 @@ import json
 import os
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from hoistwaywatch.bus.nats_bus import NatsBus
 from hoistwaywatch.contracts.alerts import HwAlertPacketV1
+from hoistwaywatch.observability import get_logger, setup_logging
+from hoistwaywatch.util import wait_for_shutdown
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -29,8 +32,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    setup_logging(service="alerts")
+    log = get_logger("hoistwaywatch.alerts", service="alerts")
     bus = NatsBus(args.nats)
     await bus.connect()
+    stop = wait_for_shutdown()
 
     async def on_alert(msg: dict) -> None:
         alert = HwAlertPacketV1.model_validate(msg)
@@ -38,6 +44,7 @@ async def _run(args: argparse.Namespace) -> int:
         # stdout for operator visibility / journald
         print(line, flush=True)
         # durable local log
+        Path(args.log).parent.mkdir(parents=True, exist_ok=True)
         with open(args.log, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
@@ -52,9 +59,19 @@ async def _run(args: argparse.Namespace) -> int:
                 },
             )
             await proc.wait()
+        log.info(
+            "alert handled",
+            extra={
+                "alert_id": alert.alert_id,
+                "severity": alert.severity,
+                "hazard_score": alert.hazard_score,
+            },
+        )
 
     await bus.subscribe_json(args.sub, on_alert, queue="alerts")
-    await asyncio.Event().wait()
+    await stop.wait()
+    log.info("shutting down")
+    await bus.close()
     return 0
 
 
@@ -62,6 +79,7 @@ def main(argv: list[str] | None = None) -> None:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     # touch log early with a header comment for human readers
     if args.log:
+        Path(args.log).parent.mkdir(parents=True, exist_ok=True)
         with open(args.log, "a", encoding="utf-8") as f:
             f.write(
                 json.dumps(

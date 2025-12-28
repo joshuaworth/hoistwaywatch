@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 
 from hoistwaywatch.bus.nats_bus import NatsBus
+from hoistwaywatch.observability import get_logger, setup_logging
+from hoistwaywatch.util import wait_for_shutdown
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,26 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=float(os.getenv("HW_MIN_CONFIDENCE", "0.5")),
     )
     p.add_argument("--publish-interval-ms", type=int, default=250)
+    p.add_argument(
+        "--occlusion-quality-lt",
+        type=float,
+        default=float(os.getenv("HW_OCCLUSION_Q_LT", "0.08")),
+    )
+    p.add_argument(
+        "--occlusion-after-sec",
+        type=float,
+        default=float(os.getenv("HW_OCCLUSION_AFTER_SEC", "2.5")),
+    )
+    p.add_argument(
+        "--tamper-diff-gt",
+        type=float,
+        default=float(os.getenv("HW_TAMPER_DIFF_GT", "0.25")),
+    )
+    p.add_argument(
+        "--tamper-after-sec",
+        type=float,
+        default=float(os.getenv("HW_TAMPER_AFTER_SEC", "3.0")),
+    )
     p.add_argument("--pub", default="hw.events.vision")
     return p.parse_args(argv)
 
@@ -90,6 +112,8 @@ def _lighting_quality(gray: np.ndarray) -> tuple[float, str | None]:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    setup_logging(service="vision")
+    log = get_logger("hoistwaywatch.vision", service="vision")
     zones = _load_zones(args.zones)
     if not zones:
         raise SystemExit(f"no zones found in {args.zones}")
@@ -97,6 +121,7 @@ async def _run(args: argparse.Namespace) -> int:
     bus = NatsBus(args.nats)
     await bus.connect()
     instance_id = f"vision-{uuid.uuid4().hex[:8]}"
+    stop = wait_for_shutdown()
 
     cap = _open_capture(args.source)
     if not cap.isOpened():
@@ -110,15 +135,20 @@ async def _run(args: argparse.Namespace) -> int:
 
     masks: dict[str, np.ndarray] = {}
     last_emit: dict[str, float] = {}
+    ref_gray: np.ndarray | None = None
+    bad_quality_since: float | None = None
+    tamper_since: float | None = None
 
     try:
-        while True:
+        while not stop.is_set():
             ok, frame = cap.read()
             if not ok or frame is None:
                 await asyncio.sleep(0.2)
                 continue
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if ref_gray is None:
+                ref_gray = gray.copy()
             h, w = gray.shape[:2]
             if not masks:
                 for z in zones:
@@ -145,6 +175,57 @@ async def _run(args: argparse.Namespace) -> int:
                 }
                 await bus.publish_json(args.pub, evt)
                 last_emit["_lighting"] = now
+
+            # Occlusion / unusable view detection (fail-loud)
+            if quality < args.occlusion_quality_lt:
+                bad_quality_since = bad_quality_since or now
+            else:
+                bad_quality_since = None
+
+            if (
+                bad_quality_since is not None
+                and (now - bad_quality_since) >= args.occlusion_after_sec
+            ):
+                if now - last_emit.get("_occlusion", 0.0) >= 1.0:
+                    evt = {
+                        "schema_version": 1,
+                        "event_id": f"evt_{uuid.uuid4().hex}",
+                        "type": "vision.tamper_or_occlusion.v1",
+                        "ts": datetime.now(UTC).isoformat(),
+                        "site_id": args.site_id,
+                        "camera_id": args.camera_id,
+                        "source": {"service": "vision", "instance_id": instance_id},
+                        "payload": {
+                            "status": "occluded",
+                            "confidence": round(float(1.0 - quality), 3),
+                        },
+                    }
+                    await bus.publish_json(args.pub, evt)
+                    last_emit["_occlusion"] = now
+
+            # Tamper detection (large persistent global change under decent visibility)
+            if ref_gray is not None and quality >= 0.35:
+                diff = cv2.absdiff(gray, ref_gray)
+                diff_score = float(np.mean(diff)) / 255.0
+                if diff_score > args.tamper_diff_gt:
+                    tamper_since = tamper_since or now
+                else:
+                    tamper_since = None
+
+                if tamper_since is not None and (now - tamper_since) >= args.tamper_after_sec:
+                    if now - last_emit.get("_tamper", 0.0) >= 2.0:
+                        evt = {
+                            "schema_version": 1,
+                            "event_id": f"evt_{uuid.uuid4().hex}",
+                            "type": "vision.tamper_or_occlusion.v1",
+                            "ts": datetime.now(UTC).isoformat(),
+                            "site_id": args.site_id,
+                            "camera_id": args.camera_id,
+                            "source": {"service": "vision", "instance_id": instance_id},
+                            "payload": {"status": "tampered", "confidence": round(diff_score, 3)},
+                        }
+                        await bus.publish_json(args.pub, evt)
+                        last_emit["_tamper"] = now
 
             # Motion-in-zone
             for zone_id, mask in masks.items():
@@ -181,6 +262,8 @@ async def _run(args: argparse.Namespace) -> int:
             await asyncio.sleep(0)  # yield
     finally:
         cap.release()
+        log.info("shutting down")
+        await bus.close()
 
 
 def main(argv: list[str] | None = None) -> None:

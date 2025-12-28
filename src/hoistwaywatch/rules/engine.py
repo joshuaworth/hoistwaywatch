@@ -14,6 +14,7 @@ from hoistwaywatch.contracts.alerts import (
     HwAlertPacketV1,
 )
 from hoistwaywatch.contracts.events import HwEventV1
+from hoistwaywatch.rules.state import TTLState
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,8 @@ class RulesEngine:
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self._rules: list[dict[str, Any]] = list(config.get("rules", []))
+        self._state = TTLState()
+        self._cooldowns: dict[str, float] = {}
 
     @staticmethod
     def load_yaml(path: str) -> RulesEngine:
@@ -40,6 +43,9 @@ class RulesEngine:
         return RulesEngine(cfg)
 
     def evaluate(self, event: HwEventV1) -> list[HwAlertPacketV1]:
+        # Update correlation state (best-effort)
+        self._ingest_state(event)
+
         alerts: list[HwAlertPacketV1] = []
         for rule in self._rules:
             match = self._match_rule(rule, event)
@@ -47,6 +53,16 @@ class RulesEngine:
                 continue
             alerts.append(self._to_alert(match, event))
         return alerts
+
+    def _ingest_state(self, event: HwEventV1) -> None:
+        # Store last-seen event payloads for correlation rules.
+        # Key design: stable, explicit, easy to reason about.
+        if event.camera_id:
+            key = f"{event.type}|cam={event.camera_id}"
+            self._state.set(key, {"event_id": event.event_id, "payload": event.payload})
+        if event.camera_id and isinstance(event.payload, dict) and "zone_id" in event.payload:
+            key = f"{event.type}|cam={event.camera_id}|zone={event.payload.get('zone_id')}"
+            self._state.set(key, {"event_id": event.event_id, "payload": event.payload})
 
     def _match_rule(self, rule: dict[str, Any], event: HwEventV1) -> RuleMatch | None:
         rid = rule.get("id")
@@ -85,6 +101,34 @@ class RulesEngine:
         if not _gte("confidence", "confidence_gte"):
             return None
 
+        # Cooldown (avoid alert floods)
+        cooldown = float(then.get("cooldown_sec", 0) or 0)
+        if cooldown > 0:
+            last = self._cooldowns.get(rid, 0.0)
+            if (datetime.now(UTC).timestamp() - last) < cooldown:
+                return None
+
+        # Correlation: require recent supporting event(s)
+        and_recent = when.get("and_recent")
+        supporting: list[tuple[str, dict[str, Any]]] = []
+        if and_recent:
+            if not isinstance(and_recent, list):
+                return None
+            for req in and_recent:
+                if not isinstance(req, dict):
+                    return None
+                et = req.get("event_type")
+                within = float(req.get("within_sec", 2.0))
+                z = req.get("zone_id")
+                cam = event.camera_id
+                if not cam or not et:
+                    return None
+                key = f"{et}|cam={cam}" if z is None else f"{et}|cam={cam}|zone={z}"
+                found = self._state.get_if_fresh(key, within_sec=within)
+                if found is None:
+                    return None
+                supporting.append((key, found))
+
         severity = then.get("severity", "warning")
         hazard_score = float(then.get("hazard_score", 50))
         summary = str(then.get("summary", rid))
@@ -101,6 +145,12 @@ class RulesEngine:
             why_parts.append(f"confidence={payload.get('confidence')}")
         if "status" in payload:
             why_parts.append(f"status={payload.get('status')}")
+        if supporting:
+            why_parts.append(f"supporting={len(supporting)}")
+
+        # Stamp cooldown now that we will emit
+        if cooldown > 0:
+            self._cooldowns[rid] = datetime.now(UTC).timestamp()
 
         return RuleMatch(
             rule_id=rid,

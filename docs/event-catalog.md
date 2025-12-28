@@ -44,3 +44,8 @@ Payload:
 - `status`: `"ok" | "tampered" | "occluded"`
 - `confidence` (number 0..1)
 
+## Correlation rules (rules service)
+The rules engine supports:
+- `then.cooldown_sec`: suppress repeats for that rule ID
+- `when.and_recent`: require one or more supporting events within a time window
+
