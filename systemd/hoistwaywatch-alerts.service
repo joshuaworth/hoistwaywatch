@@ -1,0 +1,19 @@
+[Unit]
+Description=HoistwayWatch alerts service
+After=network-online.target hoistwaywatch-nats.service
+Wants=network-online.target hoistwaywatch-nats.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hoistwaywatch
+Environment=HW_NATS_URL=nats://127.0.0.1:4222
+Environment=HW_ALERT_LOG=/var/lib/hoistwaywatch/alerts.ndjson
+# Optional: wire hardware outputs via a script (GPIO/relay/etc)
+# Environment=HW_ALERT_EXEC=/opt/hoistwaywatch/scripts/trigger_siren.sh
+ExecStart=/opt/hoistwaywatch/.venv/bin/hw-alerts
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+

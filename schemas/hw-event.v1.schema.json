@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hoistwaywatch.local/schemas/hw-event.v1.schema.json",
+  "title": "HoistwayWatch Event Envelope (v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "type", "ts", "source", "payload"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "event_id": {
+      "type": "string",
+      "description": "Opaque unique ID (uuid recommended)."
+    },
+    "type": {
+      "type": "string",
+      "description": "Event type discriminator.",
+      "enum": [
+        "capture.camera_health.v1",
+        "vision.motion_in_zone.v1",
+        "vision.person_in_zone.v1",
+        "vision.lighting_quality.v1",
+        "vision.tamper_or_occlusion.v1"
+      ]
+    },
+    "ts": {
+      "type": "string",
+      "description": "RFC3339 timestamp in UTC recommended.",
+      "format": "date-time"
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "camera_id": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "instance_id"],
+      "properties": {
+        "service": { "type": "string", "description": "e.g. capture|vision|rules|alerts|ui" },
+        "instance_id": { "type": "string", "description": "Stable per-process ID for troubleshooting." },
+        "version": { "type": "string", "description": "Service version/commit (optional)." }
+      }
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Optional for tracing multi-step processing."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Type-specific payload (see docs/event-catalog.md)."
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frame_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "References to local frames/clips (paths/URLs), not raw binaries."
+        },
+        "zone_overlay_ref": {
+          "type": "string",
+          "description": "Optional reference to an overlay image."
+        },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,22 @@
+[Unit]
+Description=HoistwayWatch vision service (motion-in-zone)
+After=network-online.target hoistwaywatch-nats.service
+Wants=network-online.target hoistwaywatch-nats.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hoistwaywatch
+Environment=HW_NATS_URL=nats://127.0.0.1:4222
+Environment=HW_SITE_ID=site_default
+Environment=HW_CAMERA_ID=cam1
+Environment=HW_CAMERA_SOURCE=0
+Environment=HW_ZONES_PATH=/opt/hoistwaywatch/configs/example-zones.json
+Environment=HW_MOTION_THRESHOLD=0.15
+Environment=HW_MIN_CONFIDENCE=0.50
+ExecStart=/opt/hoistwaywatch/.venv/bin/hw-vision
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+

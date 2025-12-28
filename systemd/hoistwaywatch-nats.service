@@ -1,0 +1,14 @@
+[Unit]
+Description=HoistwayWatch NATS event bus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nats-server
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+

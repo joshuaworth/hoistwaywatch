@@ -1,0 +1,59 @@
+version: 1
+
+defaults:
+  motion_threshold: 0.15     # 0..1 normalized motion score
+  min_confidence: 0.50       # 0..1
+
+rules:
+  - id: "R001.motion_in_car_path"
+    when:
+      event_type: "vision.motion_in_zone.v1"
+      zone_id: "car_path"
+      motion_score_gte: 0.15
+      confidence_gte: 0.50
+    then:
+      severity: "critical"
+      hazard_score: 90
+      summary: "Motion detected in car path"
+      recommended_action: "Stop work, regain line-of-sight, verify car state before proceeding."
+      cooldown_sec: 1.0
+
+  - id: "R010.camera_offline"
+    when:
+      event_type: "capture.camera_health.v1"
+      status_in: ["offline", "stalled"]
+    then:
+      severity: "warning"
+      hazard_score: 65
+      summary: "Camera offline or stalled"
+      recommended_action: "Restore camera view before relying on alerts."
+      cooldown_sec: 5.0
+
+  - id: "R020.view_occluded_or_tampered"
+    when:
+      event_type: "vision.tamper_or_occlusion.v1"
+      status_in: ["occluded", "tampered"]
+    then:
+      severity: "critical"
+      hazard_score: 85
+      summary: "Camera view occluded or tampered"
+      recommended_action: "Restore camera view and re-run validation before continuing work."
+      cooldown_sec: 3.0
+
+  - id: "R100.motion_with_person_recent"
+    when:
+      event_type: "vision.motion_in_zone.v1"
+      zone_id: "car_path"
+      motion_score_gte: 0.15
+      confidence_gte: 0.50
+      and_recent:
+        - event_type: "vision.person_in_zone.v1"
+          zone_id: "car_path"
+          within_sec: 2.0
+    then:
+      severity: "critical"
+      hazard_score: 100
+      summary: "Motion detected while person present (recent)"
+      recommended_action: "Immediate stop. Verify person location and car state before proceeding."
+      cooldown_sec: 1.0
+

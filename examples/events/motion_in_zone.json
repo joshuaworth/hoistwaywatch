@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "event_id": "evt_001",
+  "type": "vision.motion_in_zone.v1",
+  "ts": "2025-12-28T00:00:00Z",
+  "site_id": "site_example",
+  "camera_id": "cam1",
+  "source": { "service": "vision", "instance_id": "vision-1", "version": "dev" },
+  "payload": {
+    "zone_id": "car_path",
+    "motion_score": 0.82,
+    "confidence": 0.92
+  },
+  "evidence": {
+    "frame_refs": ["file:///var/lib/hoistwaywatch/evidence/evt_001_frame.jpg"],
+    "notes": "Motion spike detected in car_path."
+  }
+}
+
