@@ -143,13 +143,22 @@ Start with:
 - `docs/privacy.md`
 - `docs/field-setup.md`
 - `docs/architecture.md`
+- `docs/deployment.md`
 
 ## Quick start 🚀
 ### Step 1: Run locally (dev)
-- Start the capture service with a webcam
-- Open the dashboard
-- Draw zones
-- Trigger motion and confirm alert
+This MVP is real and runnable: **vision → rules → alerts**.
+
+```bash
+make bootstrap
+```
+
+Bring up a local NATS server (jobsite devices run it locally), then run:
+```bash
+hw-alerts
+hw-rules --rules configs/rules.yaml
+hw-vision --source 0 --zones configs/example-zones.json
+```
 
 ### Step 2: Jobsite prototype
 - Use an isolated Wi-Fi router

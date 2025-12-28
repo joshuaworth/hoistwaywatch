@@ -1,0 +1,29 @@
+version: 1
+
+defaults:
+  motion_threshold: 0.15     # 0..1 normalized motion score
+  min_confidence: 0.50       # 0..1
+
+rules:
+  - id: "R001.motion_in_car_path"
+    when:
+      event_type: "vision.motion_in_zone.v1"
+      zone_id: "car_path"
+      motion_score_gte: 0.15
+      confidence_gte: 0.50
+    then:
+      severity: "critical"
+      hazard_score: 90
+      summary: "Motion detected in car path"
+      recommended_action: "Stop work, regain line-of-sight, verify car state before proceeding."
+
+  - id: "R010.camera_offline"
+    when:
+      event_type: "capture.camera_health.v1"
+      status_in: ["offline", "stalled"]
+    then:
+      severity: "warning"
+      hazard_score: 65
+      summary: "Camera offline or stalled"
+      recommended_action: "Restore camera view before relying on alerts."
+

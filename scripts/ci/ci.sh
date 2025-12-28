@@ -56,9 +56,11 @@ fi
 # If Python tooling exists, run common checks (optional)
 if test -f pyproject.toml || test -f requirements.txt; then
   if command -v python3 >/dev/null 2>&1; then
-    echo "CI: Python config detected; running basic import/lint hooks if configured"
-    # Keep this intentionally minimal until a runtime is chosen.
-    python3 -V
+    echo "CI: Python config detected; running lint/tests"
+    python3 -m pip install -U pip
+    python3 -m pip install -e ".[dev]"
+    python3 -m ruff check .
+    python3 -m pytest
   else
     fail "Python config present but python3 not available"
   fi
