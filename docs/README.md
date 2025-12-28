@@ -4,6 +4,7 @@ This folder is the source of truth for how HoistwayWatch is used in the field an
 
 ## Start here
 - `safety.md`: safety stance and operating assumptions
+- `privacy.md`: privacy posture and recording guidance
 - `hardware.md`: reference hardware options and camera considerations
 - `installation.md`: install/run instructions (prototype → jobsite)
 - `field-setup.md`: practical setup checklist and validation steps

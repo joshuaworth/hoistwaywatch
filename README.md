@@ -137,6 +137,13 @@ hoistwaywatch/
   licenses/
 ```
 
+## Documentation 📚
+Start with:
+- `docs/safety.md`
+- `docs/privacy.md`
+- `docs/field-setup.md`
+- `docs/architecture.md`
+
 ## Quick start 🚀
 ### Step 1: Run locally (dev)
 - Start the capture service with a webcam
