@@ -1,212 +1,208 @@
-# HoistwayWatch 📹⚠️  
-Open-source real-time hoistway awareness for technician safety
+# 📹 HoistwayWatch
 
-Most serious incidents are not mysterious failures. They are moments of uncertainty: unseen movement, unexpected state changes, bad line of sight, or wrong assumptions at the worst possible time.
+**Open-source real-time hoistway awareness for technician safety.**
 
-HoistwayWatch is an open-source project to provide 📹 continuous visibility 📹 and real-time alerts for elevator hoistway work using low-cost cameras plus simple, explainable detection.
+Most serious incidents aren't mysterious failures. They're moments of uncertainty—unseen movement, unexpected state changes, bad line of sight, wrong assumptions at the worst possible time.
 
-This is not meant to replace existing safety practices. It adds real-time awareness so fewer hazards become surprises.
+HoistwayWatch provides continuous visibility and real-time alerts for elevator hoistway work using low-cost cameras and simple, explainable detection.
 
-## Goals 🎯
-- Real-time hoistway awareness with inexpensive hardware
-- Detect motion and unsafe conditions and alert immediately
-- Keep logic auditable, simple, and explainable
-- Run locally on-site (privacy-first)
-- Work vendor-neutral and avoid proprietary controller integration for the MVP
+---
 
-## Non-goals 🚫
-- This is not a controller override system
-- This is not a substitute for proper procedures, training, or codes
-- This is not a remote monitoring service by default
-- This project does not provide OEM-specific instructions
+## ⚡ Quick Facts
 
-## Core concept 🧠
-A camera watches the hoistway zones that matter. The system detects:
-- Car movement (or any movement in defined zones)
-- Human presence in defined danger zones (optional)
-- Door zone changes (optional)
-- Unusual motion patterns (optional)
-- “Movement while someone is present in the hoistway” style rules
+| | |
+|---|---|
+| **Type** | Safety awareness system |
+| **Stack** | Python 3.12 · OpenCV · NATS · Pydantic |
+| **Hardware** | Raspberry Pi 5 / Jetson Orin |
+| **Status** | 🟡 MVP (vision → rules → alerts working) |
+| **License** | Apache 2.0 |
 
-Then it triggers:
-- Local audible alarm
-- Flashing strobe
-- Phone notification (local network)
-- Event log for review
+---
 
-## MVP features ✅
-### 1) Continuous visibility
-- One or more cameras with a simple live dashboard
-- Timestamped recording optional
+## 🎯 What It Does
 
-### 2) Motion detection with zones
-- Define regions of interest (ROI) for “car path”, “counterweight path”, “pit”, “overhead”
-- Trigger alert when motion occurs in a zone
+| Feature | Description |
+|---------|-------------|
+| 📹 **Zone-based motion detection** | Define car path, pit, overhead zones—alert when motion detected |
+| 👁️ **Lighting quality awareness** | Confidence-aware detection that knows when visibility is poor |
+| 🚨 **Tamper/occlusion detection** | Alerts if camera is moved, covered, or view is blocked |
+| 📋 **Explainable alerts** | Every alert shows exactly what triggered it and why |
+| 🔇 **Local-first** | Runs on-site, no cloud required, privacy by default |
 
-### 3) Presence detection (optional)
-- Detect a person in a defined zone
-- Trigger stronger alert if motion happens while presence is detected
+---
 
-### 4) Local-first alerting
-- On-device alarms
-- Local network notifications
-- No cloud required
+## ⚠️ Safety Stance
 
-### 5) Explainable rules engine
-- Rules are simple JSON or YAML
-- Every alert explains exactly what triggered it
+HoistwayWatch is an **awareness layer**, not a safety interlock.
 
-## Safety stance ⚠️
-HoistwayWatch is an awareness layer, not a safety interlock.  
-It should be used only as an additional aid with proper training and procedures.
+| What it is | What it is NOT |
+|------------|----------------|
+| Additional visibility aid | Controller override system |
+| Real-time motion alerts | Substitute for procedures/training |
+| Explainable rule-based detection | Certified safety device |
+| Local-first, privacy-respecting | Remote monitoring service |
 
-If you want a safety interlock system, that requires a totally different engineering and certification path.
+---
 
-## Hardware options 🧰
-### Lowest cost
-- Raspberry Pi 5 or Pi 4
-- 1 to 2 USB cameras or PoE IP camera
-- Small powered speaker + strobe
-- Optional local Wi-Fi router (jobsite isolated network)
+## 🏗️ Architecture
 
-### Best practical “site ready”
-- NVIDIA Jetson Orin Nano or Orin NX
-- 1 to 4 PoE IP cameras
-- PoE switch
-- Speaker + strobe
-- Rugged case
+Four microservices communicating via NATS message bus:
 
-### Sensors (optional add-ons)
-- Simple vibration sensor
-- Magnetic door switch for access points
-- IR beam for doorway presence
+| Service | Purpose | Events |
+|---------|---------|--------|
+| `hw-capture` | Camera health monitoring | `capture.camera_health.v1` |
+| `hw-vision` | Motion/tamper/lighting detection | `vision.motion_in_zone.v1`, `vision.tamper_or_occlusion.v1` |
+| `hw-rules` | Event → Alert conversion (YAML rules) | Subscribes to all `hw.events.*` |
+| `hw-alerts` | Siren/strobe/log output | `hw.alerts.v1` |
 
-## Software architecture 🏗️
-### Components
-- `hw-capture`  
-  Camera ingest (RTSP for IP cams, UVC for USB cams)
+**Data Flow:**
+```
+Camera → hw-capture → NATS → hw-vision → NATS → hw-rules → NATS → hw-alerts → Siren/Strobe
+```
 
-- `hw-vision`  
-  Motion detection and optional object detection
+---
 
-- `hw-rules`  
-  A small rules engine that evaluates events like:
-  - motion_in_zone
-  - person_in_zone
-  - motion_and_person
-  - camera_offline
-  - low_light
+## 📡 Event Types
 
-- `hw-alerts`  
-  Audible, strobe, push notifications (local), event log
+| Event | Payload | Use |
+|-------|---------|-----|
+| `capture.camera_health.v1` | `status`, `latency_ms` | Camera online/offline/stalled |
+| `vision.motion_in_zone.v1` | `zone_id`, `motion_score`, `confidence` | Motion detected in zone |
+| `vision.person_in_zone.v1` | `zone_id`, `confidence` | Person detected (optional) |
+| `vision.lighting_quality.v1` | `quality`, `reason` | Visibility assessment |
+| `vision.tamper_or_occlusion.v1` | `status`, `confidence` | Camera tampered/occluded |
 
-- `hw-ui`  
-  Local dashboard showing live feeds, zones, and alert history
+---
 
-### ML approach 🤖
-Start with simple, robust primitives:
-- Motion detection (frame differencing, background subtraction)
-- Zone-based triggering
-- Optional person detector (YOLO or MobileNet) running locally
+## 🧰 Hardware Options
 
-Design rule: If the ML fails, the system still provides continuous visibility.
+| Tier | Hardware | Cameras | Use Case |
+|------|----------|---------|----------|
+| **Dev** | Raspberry Pi 5 | USB webcam | Prototyping |
+| **Jobsite** | Raspberry Pi 5 + PoE hat | 1-2 IP cameras | Field testing |
+| **Production** | Jetson Orin Nano/NX | 1-4 PoE cameras | Full deployment |
 
-## Repo layout 📁
+**Output devices:** Speaker + strobe for audible/visual alerts
+
+---
+
+## 📋 Rules Engine
+
+YAML-configurable rules with correlation support:
+
+```yaml
+- id: "R100.motion_with_person_recent"
+  when:
+    event_type: "vision.motion_in_zone.v1"
+    zone_id: "car_path"
+    motion_score_gte: 0.15
+    and_recent:
+      - event_type: "vision.person_in_zone.v1"
+        zone_id: "car_path"
+        within_sec: 2.0
+  then:
+    severity: "critical"
+    hazard_score: 100
+    summary: "Motion detected while person present"
+    recommended_action: "Immediate stop. Verify person location."
+```
+
+| Feature | Description |
+|---------|-------------|
+| `zone_id` filter | Match specific zones |
+| `motion_score_gte` | Threshold for motion magnitude |
+| `confidence_gte` | Minimum visibility confidence |
+| `and_recent` | Require supporting events within time window |
+| `cooldown_sec` | Prevent alert floods |
+
+---
+
+## 📁 Project Structure
+
 ```
 hoistwaywatch/
-  README.md
-  docs/
-    safety.md
-    hardware.md
-    installation.md
-    field-setup.md
-    faq.md
-  apps/
-    dashboard/         # web UI
-  services/
-    capture/           # camera ingest
-    vision/            # motion + detection
-    rules/             # event rules engine
-    alerts/            # audio/strobe/notify
-  configs/
-    example-site.yaml
-    example-zones.json
-  scripts/
-    setup-pi.sh
-    setup-jetson.sh
-  licenses/
+├── src/hoistwaywatch/
+│   ├── capture/cli.py      # Camera health service
+│   ├── vision/cli.py       # Motion detection service
+│   ├── rules/              # Rules engine + state
+│   ├── alerts/cli.py       # Alert output service
+│   ├── bus/nats_bus.py     # NATS messaging
+│   ├── contracts/          # Pydantic models (events, alerts)
+│   └── observability/      # JSON structured logging
+├── configs/
+│   ├── rules.yaml          # Example rules
+│   └── example-zones.json  # Zone polygon definitions
+├── schemas/                # JSON Schema definitions
+├── docs/                   # Safety, architecture, deployment
+├── scripts/                # Pi/Jetson setup scripts
+└── tests/                  # pytest coverage
 ```
 
-## Documentation 📚
-Start with:
-- `docs/safety.md`
-- `docs/privacy.md`
-- `docs/field-setup.md`
-- `docs/architecture.md`
-- `docs/deployment.md`
+---
 
-## Quick start 🚀
-### Step 1: Run locally (dev)
-This MVP is real and runnable: **vision → rules → alerts**.
+## 🚀 Quick Start
 
+**1. Install**
 ```bash
 make bootstrap
 ```
 
-Bring up a local NATS server (jobsite devices run it locally), then run:
+**2. Start NATS** (jobsite devices run locally)
 ```bash
-hw-alerts
-hw-rules --rules configs/rules.yaml
+nats-server
+```
+
+**3. Run the pipeline**
+```bash
+hw-alerts &
+hw-rules --rules configs/rules.yaml &
 hw-vision --source 0 --zones configs/example-zones.json
 ```
 
-### Step 2: Jobsite prototype
-- Use an isolated Wi-Fi router
-- Place camera where it can see the critical path
-- Add a speaker and strobe
-- Validate “movement equals alert” works every time
+Motion in a defined zone → rule triggers → alert fires.
 
-## Field setup guidance 👷‍♂️
-The system is only as good as camera placement. The MVP guidance:
-- Favor angles that show the car path clearly
-- Avoid direct glare and strong reflections
-- Add a second camera for pits and overheads when possible
-- Prefer fixed mounts and stable reference points
-- The goal is not pretty video. The goal is clarity under real conditions
+---
 
-## Privacy 🔒
-- Default mode is local-only
-- Recording is optional and off by default
-- No cloud upload by default
-- If an org wants centralized logging, it’s an opt-in module
+## 🛠️ Dev Commands
 
-## Roadmap 🛣️
-### v0.1 (MVP)
-- Live view dashboard
-- Zones + motion detection
-- Local alerts
-- Event logging
+| Command | Description |
+|---------|-------------|
+| `make bootstrap` | Install dependencies |
+| `make lint` | Run ruff |
+| `make test` | Run pytest |
+| `make ci` | Full CI check |
 
-### v0.2
-- Optional person detection
-- Multi-camera support
-- Better low-light handling
+---
 
-### v0.3
-- Portable “jobsite kit” reference build
-- Better calibration tools
-- Offline-first mobile companion view
+## 🛣️ Roadmap
 
-### Future
-- Integrations that are vendor-neutral (not controller-specific) where feasible
-- Formal validation guidance for organizations that want to adopt responsibly
+| Version | Features |
+|---------|----------|
+| **v0.1** ✅ | Zone motion detection, rules engine, local alerts |
+| **v0.2** | Person detection (YOLO), multi-camera, low-light handling |
+| **v0.3** | Portable jobsite kit, calibration tools, mobile companion |
 
-## How to contribute 🤝
-We want:
-- Field feedback on what zones matter
-- Camera placement guidance from actual installers and service techs
-- Edge-case videos (with privacy-safe handling)
-- Simple improvements that increase reliability
+---
 
-## License 📜
-Recommended: Apache 2.0 (permissive, safe for broad adoption).
+## 🔒 Privacy
+
+- **Local-only by default** — no cloud, no external connections
+- **Recording optional** — off by default
+- **Centralized logging** — opt-in module for orgs that want it
+
+---
+
+## 🤝 Contributing
+
+Looking for:
+- Field feedback on zone placement
+- Camera angle guidance from actual techs
+- Edge-case test scenarios
+- Reliability improvements
+
+---
+
+## 📜 License
+
+Apache 2.0
