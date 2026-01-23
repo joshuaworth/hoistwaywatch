@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+    restart: unless-stopped
+
+  capture:
+    build:
+      context: ..
+      dockerfile: deploy/python.Dockerfile
+    environment:
+      HW_NATS_URL: "nats://nats:4222"
+      HW_SITE_ID: "site_default"
+      HW_CAMERA_ID: "cam1"
+      # Update to your RTSP URL or device index string
+      HW_CAMERA_SOURCE: "0"
+    command: ["hw-capture"]
+    depends_on: [nats]
+    restart: unless-stopped
+
+  vision:
+    build:
+      context: ..
+      dockerfile: deploy/python.Dockerfile
+    environment:
+      HW_NATS_URL: "nats://nats:4222"
+      HW_SITE_ID: "site_default"
+      HW_CAMERA_ID: "cam1"
+      HW_CAMERA_SOURCE: "0"
+      HW_ZONES_PATH: "/app/configs/example-zones.json"
+      HW_MOTION_THRESHOLD: "0.15"
+      HW_MIN_CONFIDENCE: "0.50"
+    volumes:
+      - ../configs:/app/configs:ro
+    command: ["hw-vision"]
+    depends_on: [nats]
+    restart: unless-stopped
+
+  rules:
+    build:
+      context: ..
+      dockerfile: deploy/python.Dockerfile
+    environment:
+      HW_NATS_URL: "nats://nats:4222"
+      HW_RULES_PATH: "/app/configs/rules.yaml"
+    volumes:
+      - ../configs:/app/configs:ro
+    command: ["hw-rules"]
+    depends_on: [nats]
+    restart: unless-stopped
+
+  alerts:
+    build:
+      context: ..
+      dockerfile: deploy/python.Dockerfile
+    environment:
+      HW_NATS_URL: "nats://nats:4222"
+      HW_ALERT_LOG: "/app/data/alerts.ndjson"
+      # HW_ALERT_EXEC: "/app/scripts/trigger_siren.sh"
+    volumes:
+      - ./data:/app/data
+    command: ["hw-alerts"]
+    depends_on: [nats]
+    restart: unless-stopped
+

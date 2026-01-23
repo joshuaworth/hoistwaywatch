@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hoistwaywatch.local/schemas/hw-alert-packet.v1.schema.json",
+  "title": "HoistwayWatch Alert Packet (v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "alert_id",
+    "ts",
+    "severity",
+    "hazard_score",
+    "summary",
+    "explanation",
+    "trigger"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "alert_id": { "type": "string" },
+    "ts": { "type": "string", "format": "date-time" },
+    "site_id": { "type": "string" },
+    "camera_id": { "type": "string" },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "warning", "critical"]
+    },
+    "hazard_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "0..100. Prefer explainable composition; treat uncertainty explicitly."
+    },
+    "summary": { "type": "string" },
+    "recommended_action": { "type": "string" },
+    "explanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_id", "why", "inputs"],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "why": { "type": "string" },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string" },
+              "value": {},
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ids"],
+      "properties": {
+        "event_ids": { "type": "array", "items": { "type": "string" } },
+        "correlation_id": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frame_refs": { "type": "array", "items": { "type": "string" } },
+        "zone_overlay_ref": { "type": "string" }
+      }
+    },
+    "debug": {
+      "type": "object",
+      "description": "Optional. Include only in dev; avoid in field logs if it leaks sensitive context.",
+      "additionalProperties": true
+    }
+  }
+}
+

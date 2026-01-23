@@ -1,0 +1,17 @@
+[Unit]
+Description=HoistwayWatch rules service
+After=network-online.target hoistwaywatch-nats.service
+Wants=network-online.target hoistwaywatch-nats.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hoistwaywatch
+Environment=HW_NATS_URL=nats://127.0.0.1:4222
+Environment=HW_RULES_PATH=/opt/hoistwaywatch/configs/rules.yaml
+ExecStart=/opt/hoistwaywatch/.venv/bin/hw-rules
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+
